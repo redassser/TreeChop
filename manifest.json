@@ -1,0 +1,28 @@
+{
+    "format_version": 2,
+    "header": {
+        "name": "Treechop",
+        "description": "Cut down entire trees easily and effeciently. Made by Renegades.",
+        "uuid": "46a61503-13b8-42df-ac54-c8420078e7bd",
+        "version": [1,1,0],
+        "min_engine_version": [1,20,10]
+    },
+    "modules": [
+        {
+            "type": "script",
+            "language": "javascript",
+            "entry": "scripts/index.js",
+            "uuid": "a340e349-9d50-43ca-96ef-67d09f485f75",
+            "version": [1,1,0]
+        }
+    ],
+    "capabilities": [
+        "script_eval"
+    ],
+    "dependencies": [
+        {
+            "module_name": "@minecraft/server",
+            "version": "1.4.0-beta"
+        }
+    ]
+}
