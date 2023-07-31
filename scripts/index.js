@@ -3,6 +3,7 @@ import { DynamicPropertiesDefinition, MinecraftEntityTypes, world, MinecraftBloc
 world.afterEvents.worldInitialize.subscribe((event) => {
     const propertiesDefinition = new DynamicPropertiesDefinition();
     propertiesDefinition.defineBoolean('treecap');
+    propertiesDefinition.defineBoolean('cutting');
     event.propertyRegistry.registerEntityTypeDynamicProperties(propertiesDefinition, MinecraftEntityTypes.player);
 });
 world.afterEvents.itemUse.subscribe((event) => {
@@ -11,6 +12,7 @@ world.afterEvents.itemUse.subscribe((event) => {
     if (item == undefined || !item.hasTag("minecraft:is_axe") || !player.isSneaking) return; //Check if player has axe in hand and is sneaking, will only work if they have an axe
     if (!player.getDynamicProperty('treecap')) {
         player.setDynamicProperty('treecap', true);
+        player.setDynamicProperty('cutting', false);
         player.onScreenDisplay.setActionBar("Treechop On");
     } else {
         player.setDynamicProperty('treecap', false);
@@ -20,19 +22,24 @@ world.afterEvents.itemUse.subscribe((event) => {
 
 world.afterEvents.blockBreak.subscribe(async (event) => { 
     const player = event.player;
-    const block = event.brokenBlockPermutation;
+    if (player.getDynamicProperty('cutting')) { player.onScreenDisplay.setActionBar("Wait for the other tree to finish falling!"); return; }
     if (!player.getDynamicProperty('treecap')) return;
-    if (block == undefined || (!block.hasTag("log") && !block.type.id.includes("_log") && !block.type.id.includes("stripped_"))) return; //Check if broken block is log, easy filter check first
+    const block = event.brokenBlockPermutation;
+    if (!isLog(block)) return; //Check if broken block is log, easy filter check first
     const slot = player.getComponent("minecraft:inventory").container.getSlot(player.selectedSlot);
     const item = slot.getItem();
     if (item == undefined || !item.hasTag("minecraft:is_axe")) return; //Check if player has axe in hand, will only work if they have an axe
+    player.setDynamicProperty('cutting', true);
     const itemdamage = item.getComponent("minecraft:durability").damage, itemmax = item.getComponent("minecraft:durability").maxDurability;
     const durability = item.getComponent("minecraft:enchantments").enchantments.hasEnchantment("unbreaking");
-    var damage = await beginloop(event.dimension, itemdamage*(1+durability), itemmax*(1+durability), event.block.location); //Begin Loop
+    if (itemmax - itemdamage <= 1) { player.setDynamicProperty('cutting', false); return; }
+    var damage = await beginloop(event.dimension, itemdamage * (1 + durability), itemmax * (1 + durability), event.block.location); //Begin Loop
     damage = Math.ceil(damage * 1 / (1 + durability));
     const newItem = item.clone(); newItem.getComponent("minecraft:durability").damage = damage;
     if (damage >= itemmax) { player.onScreenDisplay.setActionBar("Axe at 0 durability!"); }
     slot.setItem(newItem);
+    player.setDynamicProperty('cutting', false);
+
 });
 
 const blockCheckArrayx = [
@@ -51,9 +58,8 @@ async function xloop(dimension, toCheckArray, horizontalsArray, itemdamage, item
                 y: brokenBlockCoord.y,
                 z: brokenBlockCoord.z + blockCheck[1]
             }
-            if (foundArray.some(coord => JSON.stringify(coord) === JSON.stringify(newBlockLocation))) return;
-            const newBlock = dimension.getBlock(newBlockLocation);
-            if (newBlock != undefined && (newBlock.hasTag("log") || newBlock.type.id.includes("_log")) || newBlock.type.id.includes("stripped_")) {
+            if (foundArray.some(loc => (loc.x==newBlockLocation.x && loc.y==newBlockLocation.y && loc.z==newBlockLocation.z))) return;
+            if (isLog(dimension.getBlock(newBlockLocation))) {
                 foundArray.push(newBlockLocation);
             }
         });
@@ -74,4 +80,9 @@ async function ystep(dimension, horizontalsArray, itemdamage, itemmax) {
         horizontalsArray[i].y += 1;
     }
     return await xloop(dimension, horizontalsArray, [], itemdamage, itemmax);
+}
+function isLog(block) {
+    if (block === undefined) return false; 
+    if (block.hasTag("log") || (block.type.id.includes("_log") && !block.type.id.includes("stripped_"))) return true;
+    else return false;
 }
